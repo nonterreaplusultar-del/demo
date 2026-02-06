@@ -1,16 +1,22 @@
+// ES Module 版本，批量修复 blog/talks 文章 frontmatter
+
 import fs from "fs-extra";
 import path from "path";
 import matter from "gray-matter";
-
-// 获取当前目录路径（ESM 不支持 __dirname）
 import { fileURLToPath } from "url";
 import { dirname } from "path";
 
+// 获取 __dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const BLOG_DIR = path.join(__dirname, "../blog"); // 调整到你的 blog 文件夹
+// 修改为你的 blog 目录
+const BLOG_DIR = path.join(__dirname, "blog");
 
+
+/**
+ * 批量处理 Markdown 文件
+ */
 async function processFiles(dir) {
   const files = await fs.readdir(dir);
 
@@ -25,18 +31,23 @@ async function processFiles(dir) {
       const parsed = matter(content);
       const data = parsed.data;
 
-      // tags
+      // --- type ---
+      // 自动修正为 "talk"（保证 schema 一致）
+      data.type = "talk";
+
+      // --- tags ---
       if (data.tags) {
         if (typeof data.tags === "string") data.tags = [data.tags];
       } else {
         data.tags = [];
       }
 
-      // categories
-      if (!data.categories) data.categories = ["talks"];
-      else if (typeof data.categories === "string") data.categories = [data.categories];
+      // --- categories ---
+      // schema 要求 string
+      if (!data.categories) data.categories = "talks";
+      else if (Array.isArray(data.categories)) data.categories = data.categories[0];
 
-      // date
+      // --- date ---
       if (data.date) {
         const d = new Date(data.date);
         if (!isNaN(d)) {
@@ -51,9 +62,10 @@ async function processFiles(dir) {
         data.date = new Date().toISOString().slice(0, 10);
       }
 
-      // id
+      // --- id ---
       if (!data.id) data.id = path.basename(file, path.extname(file));
 
+      // 写回文件
       const newContent = matter.stringify(parsed.content, data);
       await fs.writeFile(filePath, newContent, "utf-8");
 
@@ -62,6 +74,7 @@ async function processFiles(dir) {
   }
 }
 
+// 执行
 processFiles(BLOG_DIR)
   .then(() => console.log("🎉 所有文章处理完成！"))
   .catch((err) => console.error(err));

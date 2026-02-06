@@ -3,15 +3,14 @@ title: 在这里填写你的演讲标题
 type: talk
 permalink: /talks/2026-02-06-sample-talk
 venue: XJTU
-date: '2026-02-05'
+date: '2026-02-03'
 location: CN
 tags:
   - daily
   - 讲座
 speaker: 演讲者姓名
 summary: 这里写一段简短的演讲摘要
-categories:
-  - talks
+categories: talks
 id: 2026-02-06-sample-talk
 ---
 
