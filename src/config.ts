@@ -82,14 +82,7 @@ export default {
     recommendArticleShow: true
   },
   // DNS预解析地址
-  DNSOptimization: [
-    'https://i0.wp.com',
-    'https://cn.cravatar.com',
-    'https://analytics.vvhan.com',
-    'https://vh-api.4ce.cn',
-    'https://registry.npmmirror.com',
-    'https://pagead2.googlesyndication.com'
-  ],
+  DNSOptimization: [],
   // 博客音乐组件解析接口
   vhMusicApi: 'https://vh-api.4ce.cn/blog/meting',
   // 评论组件（只允许同时开启一个）
