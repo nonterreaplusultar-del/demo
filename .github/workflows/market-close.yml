@@ -9,6 +9,7 @@ on:
       - '.github/workflows/market-close.yml'
       - 'script/market-close.mjs'
       - 'public/markets/market-data.js'
+      - 'vercel.json'
 permissions:
   contents: write
 concurrency:
@@ -34,13 +35,15 @@ jobs:
             git show origin/market-data:close.json > "$previous"
           fi
           node script/market-close.mjs "$previous" "$RUNNER_TEMP/close.json"
+          cp vercel.json "$RUNNER_TEMP/market-vercel.json"
           if git rev-parse --verify refs/remotes/origin/market-data >/dev/null 2>&1; then
             git switch -c market-data --track origin/market-data
           else
             git switch --orphan market-data
           fi
           cp "$RUNNER_TEMP/close.json" close.json
-          git add close.json
+          cp "$RUNNER_TEMP/market-vercel.json" vercel.json
+          git add close.json vercel.json
           if ! git diff --cached --quiet; then
             git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Refresh market closing prices'
             git push origin HEAD:refs/heads/market-data

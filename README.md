@@ -9,6 +9,8 @@
 
 `npm run build` 生成站点。完整的看盘静态文件位于 `dist/markets/`，可单独发布到 GitHub Pages 的 `markets/` 目录。仓库工作流 `Market closing prices` 在工作日的 10:35、22:35 UTC 尝试更新收盘归档，写入专用分支 `market-data`。所有请求均使用公开行情接口。
 
+Vercel 从 `main` 构建生产站点，看盘入口是 `/markets/`。`vercel.json` 让 Vercel 跳过行情归档分支 `market-data` 和静态发布分支 `gh-pages`。发布这两个分支时需一并复制该文件到分支根目录。
+
 
 ## 🚀 vhAstro-Theme：一款基于 Astro 构建的优雅的响应式博客主题
 

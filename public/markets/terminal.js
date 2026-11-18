@@ -846,5 +846,5 @@ updateClock();
 setInterval(updateClock, 1000);
 render();
 renderStatus();
-void readArchive("./snapshot.json").catch(() => {});
+void readArchive(new URL("./snapshot.json", import.meta.url)).catch(() => {});
 void refresh(true);

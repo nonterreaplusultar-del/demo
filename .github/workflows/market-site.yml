@@ -7,21 +7,35 @@ on:
     paths:
       - '.github/workflows/market-site.yml'
       - 'script/check-market-site.cjs'
+      - 'vercel.json'
 permissions:
   contents: read
 jobs:
   browser:
-    if: github.event_name != 'deployment_status' || (github.event.deployment_status.state == 'success' && github.event.deployment.environment == 'github-pages')
+    if: >-
+      github.event_name != 'deployment_status' ||
+      (github.event.deployment_status.state == 'success' &&
+      (github.event.deployment.environment == 'github-pages' || startsWith(github.event.deployment.environment, 'Production')))
+    strategy:
+      fail-fast: false
+      matrix:
+        site: >-
+          ${{ fromJSON(github.event_name != 'deployment_status' && '["pages","vercel"]' ||
+          github.event.deployment.environment == 'github-pages' && '["pages"]' || '["vercel"]') }}
+    name: Check ${{ matrix.site }}
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 9
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event_name == 'deployment_status' && github.event.repository.default_branch || github.sha }}
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: Check Pages, intraday quotes and fund NAV in Chrome
+      - name: Check published charts, intraday quotes and fund NAV in Chrome
+        env:
+          MARKET_SITE: ${{ matrix.site }}
         run: |
           npm install --prefix "$RUNNER_TEMP/market-browser" --ignore-scripts --no-audit --no-fund playwright-core@1.56.1
           NODE_PATH="$RUNNER_TEMP/market-browser/node_modules" CHROME_BIN="$(command -v google-chrome)" node script/check-market-site.cjs

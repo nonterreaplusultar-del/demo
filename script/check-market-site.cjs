@@ -1,7 +1,11 @@
 // Run the public release through its normal browser entry point, including its cross-origin price feeds.
 const assert = require("node:assert/strict");
 const { chromium } = require("playwright-core");
-const url = "https://nonterreaplusultar-del.github.io/demo/markets/";
+const sites = {
+  pages: "https://nonterreaplusultar-del.github.io/demo/markets/",
+  vercel: "https://demo-nu-smoky-55.vercel.app/markets",
+};
+const url = sites[process.env.MARKET_SITE ?? "pages"];
 
 async function main() {
   const browser = await chromium.launch({
@@ -10,14 +14,19 @@ async function main() {
   });
   try {
     const page = await browser.newPage();
-    let response;
-    for (let attempt = 0; attempt < 5; attempt++) {
-      response = await page.goto(url, { waitUntil: "domcontentloaded" });
-      if (response?.ok()) break;
-      await new Promise((done) => setTimeout(done, 10000));
+    for (let attempt = 1; ; attempt++) {
+      try {
+        const response = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 15000 });
+        assert.equal(response?.status(), 200, `Failed to load ${url}`);
+        assert.ok(await page.locator("#candle-mode").count(), "Waiting for the updated chart");
+        break;
+      } catch (error) {
+        if (attempt === 12) throw error;
+        await new Promise((done) => setTimeout(done, 10000));
+      }
     }
-    assert.equal(response?.status(), 200, "Pages did not return the terminal");
     assert.equal(await page.title(), "Tickline · 市场看板");
+    assert.ok(await page.evaluate(async () => (await document.fonts.load('14px "Geist Mono"')).length > 0), "Market font failed to load");
     await page.locator("#price").waitFor();
     await page.waitForFunction(
       () => document.querySelector("#price").textContent !== "—"
@@ -33,7 +42,7 @@ async function main() {
       await page.locator("#plot").getAttribute("data-view"),
       "candles"
     );
-    console.log("Public Pages route, OHLC chart and line switch loaded.");
+    console.log("Public route, OHLC chart and line switch loaded at", page.url());
     await page.waitForFunction(
       () =>
         document.querySelector("#feed-status").classList.contains("connected"),
