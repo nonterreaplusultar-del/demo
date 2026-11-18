@@ -126,6 +126,24 @@ function numeric(value) {
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
 }
+// A record always starts with [exchange timestamp, close], including older snapshots.
+// Append real OHLC fields only when the provider reports a consistent price range.
+export function chartPoint(stamp, close, open, high, low, volume) {
+  const point = [stamp, close];
+  if (
+    Number.isFinite(open) &&
+    open > 0 &&
+    Number.isFinite(high) &&
+    high >= Math.max(open, close) &&
+    Number.isFinite(low) &&
+    low > 0 &&
+    low <= Math.min(open, close)
+  ) {
+    point.push(open, high, low);
+    if (Number.isFinite(volume) && volume >= 0) point.push(volume);
+  }
+  return point;
+}
 export async function getQuotes(ids) {
   const result = await request(quoteHost, "/api/qt/ulist.np/get", {
     secids: ids.join(","),
@@ -179,16 +197,30 @@ export async function getSeries(asset, intraday = false) {
   if (!Array.isArray(list)) throw new Error("缺少走势");
   const points = new Map();
   for (const item of list) {
-    const [stamp, , raw] = String(item).split(",");
+    const [stamp, open, raw, high, low, volume] = String(item).split(",");
     const close = numeric(raw);
     const pattern = intraday
       ? /^\d{4}-\d{2}-\d{2} \d\d:\d\d$/
       : /^\d{4}-\d{2}-\d{2}$/;
-    if (pattern.test(stamp) && close > 0) points.set(stamp, close);
+    if (pattern.test(stamp) && close > 0) {
+      points.set(
+        stamp,
+        chartPoint(
+          stamp,
+          close,
+          numeric(open),
+          numeric(high),
+          numeric(low),
+          numeric(volume)
+        )
+      );
+    }
   }
   if (!points.size) throw new Error("暂无走势");
   return {
-    points: Array.from(points).sort((a, b) => a[0].localeCompare(b[0])),
+    points: Array.from(points.values()).sort((a, b) =>
+      a[0].localeCompare(b[0])
+    ),
     source: "东方财富",
   };
 }

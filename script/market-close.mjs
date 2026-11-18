@@ -2,43 +2,65 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import { resolve } from "node:path";
-import { catalog } from "../public/markets/market-data.js";
+import { catalog, chartPoint } from "../public/markets/market-data.js";
 
-export function closingSeries(result, now = Date.now()) {
-  const meta = result?.meta;
-  const prices = result?.indicators?.quote?.[0]?.close;
-  if (!meta?.exchangeTimezoneName || !Array.isArray(prices))
-    throw new Error("missing daily closes");
+function yahooSeries(result, intraday, now = Date.now()) {
+  const meta = result?.meta,
+    bars = result?.indicators?.quote?.[0];
+  if (!meta?.exchangeTimezoneName || !Array.isArray(bars?.close))
+    throw new Error("missing prices");
+  const zone = meta.exchangeTimezoneName;
   const date = new Intl.DateTimeFormat("sv-SE", {
-    timeZone: meta.exchangeTimezoneName,
+    timeZone: zone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
   });
+  const minute =
+    intraday &&
+    new Intl.DateTimeFormat("sv-SE", {
+      timeZone: zone,
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    });
   const regular = meta.currentTradingPeriod?.regular;
   const unfinished =
-    regular && now < regular.end * 1000
+    !intraday && regular && now < regular.end * 1000
       ? date.format(regular.start * 1000)
       : null;
-  const byDate = new Map();
-  for (const [index, timestamp] of (result.timestamp ?? []).entries()) {
-    const close = prices[index];
-    if (
-      !Number.isFinite(timestamp) ||
-      timestamp * 1000 > now ||
-      !Number.isFinite(close) ||
-      close <= 0
-    )
-      continue;
-    const tradingDate = date.format(timestamp * 1000);
-    if (tradingDate !== unfinished)
-      byDate.set(tradingDate, Number(close.toFixed(4)));
+  const byStamp = new Map();
+  const round = (n) => (Number.isFinite(n) ? Number(n.toFixed(4)) : null);
+  for (const [i, timestamp] of (result.timestamp ?? []).entries()) {
+    const time = timestamp * 1000,
+      close = round(bars.close[i]);
+    if (!Number.isFinite(timestamp) || time > now || !(close > 0)) continue;
+    const session = date.format(time);
+    if (session === unfinished) continue;
+    const stamp = intraday ? session + " " + minute.format(time) : session;
+    byStamp.set(
+      stamp,
+      chartPoint(
+        stamp,
+        close,
+        round(bars.open?.[i]),
+        round(bars.high?.[i]),
+        round(bars.low?.[i]),
+        bars.volume?.[i]
+      )
+    );
   }
-  const points = Array.from(byDate)
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .slice(-265);
-  if (points.length < 2) throw new Error("insufficient completed sessions");
+  let points = Array.from(byStamp.values()).sort((a, b) =>
+    a[0].localeCompare(b[0])
+  );
+  if (!intraday) points = points.slice(-265);
+  if (points.length < (intraday ? 1 : 2))
+    throw new Error("insufficient prices");
   return points;
+}
+
+export function closingSeries(result, now = Date.now()) {
+  return yahooSeries(result, false, now);
 }
 
 export async function fetchHistory(asset, intraday = false) {
@@ -65,27 +87,7 @@ export async function fetchHistory(asset, intraday = false) {
     month: "2-digit",
     day: "2-digit",
   });
-  let points;
-  if (intraday) {
-    const minute = new Intl.DateTimeFormat("sv-SE", {
-      timeZone: meta.exchangeTimezoneName,
-      hour: "2-digit",
-      minute: "2-digit",
-      hourCycle: "h23",
-    });
-    const closes = result.indicators?.quote?.[0]?.close ?? [];
-    points = (result.timestamp ?? []).flatMap((t, i) =>
-      Number.isFinite(t) && Number.isFinite(closes[i]) && closes[i] > 0
-        ? [
-            [
-              day.format(t * 1000) + " " + minute.format(t * 1000),
-              Number(closes[i].toFixed(4)),
-            ],
-          ]
-        : []
-    );
-    if (!points.length) throw new Error("missing intraday bars");
-  } else points = closingSeries(result);
+  const points = yahooSeries(result, intraday);
   const time = meta.regularMarketTime * 1000,
     price = meta.regularMarketPrice;
   let quote = null;
