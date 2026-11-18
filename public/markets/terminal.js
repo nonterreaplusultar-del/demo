@@ -9,6 +9,7 @@ import {
   tone,
   exchangeTime,
   getQuotes,
+  chartPoint,
   getSeries,
   periodPoints,
 } from "./market-data.js";
@@ -60,6 +61,8 @@ const stars = new Set(
 );
 let current =
   resolve(new URLSearchParams(location.search).get("symbol")) ?? catalog[0];
+let stylePreference = read("chartStyle", null);
+const compactTape = matchMedia("(max-width: 600px)");
 let chosenRange = "quarter",
   market = "all",
   kind = "all",
@@ -81,7 +84,13 @@ const archive = new Map();
 const seriesCache = new Map();
 const pendingSeries = new Set(),
   pendingBackup = new Map();
-const draw = makePlot($("plot"), $("chart"), $("plot-tip"), $("plot-empty"));
+const draw = makePlot(
+  $("plot"),
+  $("chart"),
+  $("plot-tip"),
+  $("plot-empty"),
+  $("ohlc")
+);
 const dayFormatter = new Intl.DateTimeFormat("zh-CN", {
   timeZone: "Asia/Shanghai",
   year: "numeric",
@@ -118,7 +127,7 @@ const dayFormatters = Object.fromEntries(
 function updateClock() {
   const now = new Date();
   $("clock").textContent = clockFormatter.format(now);
-  $("today").textContent = dayFormatter.format(now);
+  $("clock").title = dayFormatter.format(now);
 }
 function cleanPoints(list, intraday = false) {
   if (!Array.isArray(list)) return [];
@@ -133,36 +142,44 @@ function cleanPoints(list, intraday = false) {
         Number.isFinite(p[1]) &&
         p[1] > 0
     )
-    .slice(-1600);
+    .slice(-1600)
+    .map(([stamp, close, open, high, low, volume]) =>
+      chartPoint(stamp, close, open, high, low, volume)
+    );
 }
-function mergeArchive(data) {
+function preferSeries(first, second) {
+  if (!first) return second;
+  if (!second) return first;
+  const a = first.points.at(-1),
+    b = second.points.at(-1);
+  if (a[0] !== b[0]) return a[0] > b[0] ? first : second;
+  // A previously cached close-only response must not hide a full candle on the same date.
+  if (a.length < 5 && b.length >= 5) return second;
+  return first;
+}
+function mergeArchive(data, remote) {
   if (!data || typeof data !== "object") return;
   for (const [code, row] of Object.entries(data)) {
     if (!resolve(code) || !row || typeof row.source !== "string") continue;
     const points = cleanPoints(row.points);
-    if (
-      !points.length ||
-      (archive.get(code)?.points.at(-1)[0] ?? "") > points.at(-1)[0]
-    )
-      continue;
-    archive.set(code, { ...row, points });
+    if (!points.length) continue;
+    const next = { ...row, points },
+      prior = archive.get(code);
+    archive.set(
+      code,
+      remote ? preferSeries(next, prior) : preferSeries(prior, next)
+    );
   }
 }
 function history(asset, intraday = false) {
   const key = asset.code + (intraday ? ".m" : ".d");
   if (!seriesCache.has(key)) {
-    const stored = read("series." + key, null);
-    seriesCache.set(
-      key,
-      stored && cleanPoints(stored.points, intraday).length ? stored : null
-    );
+    const stored = read("series." + key, null),
+      points = cleanPoints(stored?.points, intraday);
+    seriesCache.set(key, points.length ? { ...stored, points } : null);
   }
   const data = seriesCache.get(key);
-  if (intraday) return data;
-  const saved = archive.get(asset.code);
-  return data && (!saved || data.points.at(-1)[0] >= saved.points.at(-1)[0])
-    ? data
-    : saved;
+  return intraday ? data : preferSeries(data, archive.get(asset.code));
 }
 function quote(asset) {
   const live = quotes.get(asset.code);
@@ -200,93 +217,43 @@ function describe(q) {
 function deltaText(n) {
   return Number.isFinite(n) ? signed(n) + "%" : "—";
 }
-function token(a, big = false) {
-  const b = el(
-    "span",
-    big ? "asset-icon" : "token",
-    a.badge ?? a.code.slice(0, 2)
-  );
-  if (a.colors) {
-    b.style.setProperty("--tint", a.colors[0]);
-    b.style.setProperty("--ink", a.colors[1]);
-  }
-  return b;
+function indexGroupSize() {
+  return compactTape.matches ? 2 : 4;
 }
-function wave(points, trend) {
-  const ns = "http://www.w3.org/2000/svg",
-    svg = document.createElementNS(ns, "svg");
-  svg.setAttribute("class", "spark " + tone(trend));
-  svg.setAttribute("viewBox", "0 0 92 32");
-  svg.setAttribute("preserveAspectRatio", "none");
-  svg.setAttribute("aria-hidden", "true");
-  const values = (points ?? []).slice(-28).map((p) => p[1]);
-  if (values.length < 2) return svg;
-  const min = Math.min(...values),
-    max = Math.max(...values);
-  const y = (v) => (max === min ? 16 : 28 - ((v - min) / (max - min)) * 24);
-  const shape = values
-    .map(
-      (v, i) =>
-        (i ? "L" : "M") +
-        (2 + (i * 88) / (values.length - 1)).toFixed(1) +
-        " " +
-        y(v).toFixed(1)
-    )
-    .join(" ");
-  const fill = document.createElementNS(ns, "path");
-  fill.setAttribute("d", shape + " L90 32 L2 32 Z");
-  fill.setAttribute("fill", "currentColor");
-  fill.setAttribute("opacity", ".055");
-  const line = document.createElementNS(ns, "path");
-  line.setAttribute("d", shape);
-  line.setAttribute("stroke", "currentColor");
-  line.setAttribute("stroke-width", "1.5");
-  line.setAttribute("fill", "none");
-  line.setAttribute("stroke-linejoin", "round");
-  svg.append(fill, line);
-  return svg;
+function visibleIndices() {
+  const size = indexGroupSize();
+  return indexAssets.slice(indexPage * size, (indexPage + 1) * size);
 }
 function renderIndices() {
-  const list = indexAssets.slice(indexPage * 4, indexPage * 4 + 4);
   $("index-page").textContent =
-    indexPage + 1 + " / " + Math.ceil(indexAssets.length / 4);
+    indexPage + 1 + " / " + Math.ceil(indexAssets.length / indexGroupSize());
   $("indices").replaceChildren(
-    ...list.map((a) => {
+    ...visibleIndices().map((a) => {
       const q = quote(a),
-        h = history(a);
-      const btn = el("button", "index-card");
+        btn = el("button", "index-quote");
       btn.dataset.code = a.code;
       btn.setAttribute("aria-pressed", String(a === current));
-      const name = el("span", "index-title");
-      name.append(
-        el("span", "region", a.market),
-        el("span", "", a.name),
-        el("span", "index-symbol", a.code)
+      btn.title = a.name + " · " + describe(q);
+      btn.setAttribute(
+        "aria-label",
+        a.name +
+          " " +
+          fmt(q?.price) +
+          "，日涨跌 " +
+          deltaText(q?.percent) +
+          "，" +
+          describe(q)
       );
-      const body = el("span", "index-body");
-      const nums = el("span");
-      nums.append(
+      const title = el("span", "index-title");
+      title.append(el("b", "", a.name));
+      if (!a.name.includes(a.code))
+        title.append(el("span", "index-symbol", a.code));
+      const values = el("span", "index-values");
+      values.append(
         el("span", "index-price", fmt(q?.price)),
         el("span", "index-delta " + tone(q?.percent), deltaText(q?.percent))
       );
-      const points = h?.points;
-      // A current quote must never borrow a sparkline from a much older archive.
-      const showHistory =
-        points &&
-        (!q ||
-          Math.abs(Date.parse(q.day) - Date.parse(points.at(-1)[0])) <
-            7 * 86400000);
-      const visible = showHistory ? points : null;
-      const sparkTrend = visible
-        ? visible.at(-1)[1] - visible[Math.max(0, visible.length - 28)][1]
-        : 0;
-      body.append(nums, wave(visible, sparkTrend));
-      const stamp = el(
-        "div",
-        "index-date",
-        describe(q).replace(" 北京时间", " UTC+8")
-      );
-      btn.append(name, body, stamp);
+      btn.append(title, values);
       return btn;
     })
   );
@@ -300,8 +267,9 @@ function renderWatch() {
       (market === "all" || a.market === market) &&
       (kind === "all" || a.kind === kind)
   );
-  $("watch-title").textContent = onlyStars ? "我的自选" : "品种行情";
-  $("list-count").textContent = list.length + " 个品种";
+  $("watch-title").textContent = onlyStars ? "我的自选" : "市场行情";
+  $("list-count").textContent = list.length;
+  $("list-count").setAttribute("aria-label", list.length + " 个品种");
   $("kind-text").textContent = $("kind").selectedOptions[0].text;
   $("overview-tab").classList.toggle("active", !onlyStars);
   $("stars-tab").classList.toggle("active", onlyStars);
@@ -319,13 +287,22 @@ function renderWatch() {
       btn.dataset.code = a.code;
       btn.setAttribute("aria-pressed", String(a === current));
       btn.title = a.name + " · " + describe(q);
-      const identity = el("span", "row-identity"),
-        id = el("span", "row-id");
-      const name = el("small", "", a.name + (q?.archive ? " · " + q.day : ""));
-      id.append(el("strong", "", a.code), name);
-      identity.append(token(a), id);
+      btn.setAttribute(
+        "aria-label",
+        a.code +
+          " " +
+          a.name +
+          "，" +
+          fmt(q?.price) +
+          "，日涨跌 " +
+          deltaText(q?.percent) +
+          "，" +
+          describe(q)
+      );
+      const id = el("span", "row-id");
+      id.append(el("strong", "", a.code), el("small", "", a.name));
       btn.append(
-        identity,
+        id,
         el("span", "row-price", fmt(q?.price)),
         el("span", "row-delta " + tone(q?.percent), deltaText(q?.percent))
       );
@@ -338,7 +315,7 @@ function renderWatch() {
         "p",
         "empty-list",
         onlyStars && !stars.size
-          ? "点击走势图右上角的星标，收藏第一个品种。"
+          ? "点击品种名称旁的星标，即可加入自选。"
           : "当前筛选下没有品种。"
       )
     );
@@ -353,24 +330,26 @@ function renderDetail() {
     intraday = chosenRange === "day",
     h = history(a, intraday);
   const saved = stars.has(a.code);
+  $("asset-code").textContent = a.code;
   $("asset-name").textContent = a.name;
-  $("asset-meta").textContent =
-    a.code + " · " + places[a.market] + " · " + kindNames[a.kind];
-  $("asset-icon").replaceChildren();
+  $("asset-market").textContent =
+    places[a.market] + " · " + (a.id ? kindNames[a.kind] : "开放式基金");
+  const icon = $("asset-icon");
+  icon.style.background = a.colors?.[0] ?? "";
+  icon.style.color = a.colors?.[1] ?? "";
   if (a.kind === "index")
-    $("asset-icon").innerHTML =
+    icon.innerHTML =
       '<svg class="icon" aria-hidden="true"><use href="#i-line"/></svg>';
-  else $("asset-icon").textContent = a.badge ?? a.code.slice(0, 2);
+  else icon.textContent = a.badge ?? a.code.slice(0, 2);
   $("star").setAttribute("aria-pressed", String(saved));
   $("star").setAttribute("aria-label", saved ? "移出自选" : "加入自选");
   $("star").title = saved ? "移出自选" : "加入自选";
   $("price").textContent = fmt(q?.price);
   $("unit").textContent = a.unit;
-  $("change").textContent = q
-    ? [Number.isFinite(q.change) ? signed(q.change) : "", deltaText(q.percent)]
-        .filter(Boolean)
-        .join("  /  ")
-    : "—";
+  const diff = Number.isFinite(q?.change) ? signed(q.change) : "";
+  const percent = Number.isFinite(q?.percent) ? deltaText(q.percent) : "";
+  $("change").textContent =
+    diff && percent ? diff + " (" + percent + ")" : diff || percent || "—";
   $("change").className = tone(q?.percent);
   for (const b of $("ranges").children) {
     b.setAttribute("aria-pressed", String(b.dataset.range === chosenRange));
@@ -379,31 +358,69 @@ function renderDetail() {
   const points = periodPoints(h?.points, chosenRange),
     nav = !a.id;
   const label = nav ? "单位净值" : intraday ? "分时价" : "收盘价";
-  $("legend").textContent = label;
+  const canCandle =
+    !nav && points.length > 0 && points.every((p) => p.length >= 5);
+  const candles =
+    canCandle && (stylePreference ? stylePreference === "candles" : !intraday);
+  $("legend").textContent = nav
+    ? "净值"
+    : intraday
+    ? "分时"
+    : candles
+    ? "日 K"
+    : "日线";
+  $("candle-mode").disabled = !canCandle;
+  $("candle-mode").title = canCandle
+    ? "K 线图"
+    : nav
+    ? "基金按日公布单位净值"
+    : "此区间缺少完整开高低收数据";
+  $("candle-mode").setAttribute("aria-pressed", String(candles));
+  $("line-mode").setAttribute("aria-pressed", String(!candles));
   const key = a.code + (intraday ? ".m" : ".d");
   const message = pendingSeries.has(key)
     ? "正在读取走势…"
     : intraday
-    ? "暂未取得分时数据，可查看日线。"
-    : "此品种暂无可用历史记录";
-  draw(points, { label, intraday, empty: message });
-  const vals = points.map((p) => p[1]),
-    growth = vals.length > 1 ? (vals.at(-1) / vals[0] - 1) * 100 : null;
-  $("period-low").textContent = vals.length ? fmt(Math.min(...vals)) : "—";
-  $("period-high").textContent = vals.length ? fmt(Math.max(...vals)) : "—";
+    ? "暂无分时数据，可切换到日线。"
+    : "暂无可用历史记录";
+  draw(points, {
+    key: key + "." + chosenRange,
+    label,
+    intraday,
+    candles,
+    volume: !nav,
+    empty: message,
+  });
+  const low = points.map((p) => (nav ? p[1] : p[4] ?? p[1])),
+    high = points.map((p) => (nav ? p[1] : p[3] ?? p[1]));
+  const growth =
+    points.length > 1 ? (points.at(-1)[1] / points[0][1] - 1) * 100 : null;
+  $("period-low").textContent = points.length ? fmt(Math.min(...low)) : "—";
+  $("period-high").textContent = points.length ? fmt(Math.max(...high)) : "—";
   $("period-change").textContent = deltaText(growth);
   $("period-change").className = tone(growth);
-  const parts = [q ? q.source + " · " + describe(q) : "等待" + a.name + "报价"];
-  if (points.length)
-    parts.push(
-      "走势图 " +
-        points[0][0] +
-        " 至 " +
-        points.at(-1)[0] +
-        (h.source !== q?.source ? " · " + h.source : "")
+  const source = el(
+    "span",
+    "",
+    q ? q.source + " · " + describe(q) : "等待" + a.name + "报价"
+  );
+  $("quote-asof").replaceChildren(source);
+  if (points.length) {
+    const first = points[0][0],
+      last = points.at(-1)[0];
+    const dates = el(
+      "time",
+      "",
+      (h.source !== q?.source ? h.source + " · " : "") +
+        first +
+        " — " +
+        (intraday && first.slice(0, 10) === last.slice(0, 10)
+          ? last.slice(11)
+          : last)
     );
-  if (nav) parts.push("开放式基金按交易日更新净值");
-  $("quote-asof").textContent = parts.join("　|　");
+    dates.title = "图表覆盖区间";
+    $("quote-asof").append(dates);
+  }
 }
 function render() {
   renderIndices();
@@ -417,6 +434,8 @@ function renderStatus() {
   $("auto").querySelector("span").textContent = automatic
     ? "自动刷新 · 60s"
     : "自动刷新已暂停";
+  $("auto").title = automatic ? "暂停自动刷新" : "恢复自动刷新";
+  $("auto").setAttribute("aria-label", $("auto").title);
   $("feed-status").classList.toggle(
     "connected",
     phase === "connected" || phase === "backup"
@@ -425,7 +444,7 @@ function renderStatus() {
     waiting: "正在连接行情源…",
     connected: "东方财富已连接",
     backup: "备用行情源 Yahoo Finance 已连接",
-    failed: "报价连接中断，显示最近可用记录",
+    failed: "连接中断 · 显示最近可用记录",
   };
   $("feed-status").textContent =
     labels[phase] +
@@ -480,12 +499,9 @@ async function refreshBackupBoard() {
   const visible = Array.from(
     $("watch-rows").querySelectorAll("[data-code]")
   ).map((b) => resolve(b.dataset.code));
-  const others = [
-    ...new Set([
-      ...indexAssets.slice(indexPage * 4, indexPage * 4 + 4),
-      ...visible,
-    ]),
-  ].filter((a) => a?.yahoo && a !== probe);
+  const others = [...new Set([...visibleIndices(), ...visible])].filter(
+    (a) => a?.yahoo && a !== probe
+  );
   for (let i = 0; i < others.length; i += 3) {
     if (document.hidden) break;
     await Promise.allSettled(
@@ -535,19 +551,19 @@ function select(code, focusChart = false) {
   url.searchParams.set("symbol", code);
   window.history.replaceState(null, "", url);
   if (asset.kind === "index")
-    indexPage = Math.floor(indexAssets.indexOf(asset) / 4);
+    indexPage = Math.floor(indexAssets.indexOf(asset) / indexGroupSize());
   render();
   void loadSeries(asset, chosenRange === "day");
   if (focusChart && matchMedia("(max-width:800px)").matches)
     $("detail").scrollIntoView({ block: "start", behavior: "instant" });
 }
-async function readArchive(url) {
+async function readArchive(url, remote = false) {
   const response = await fetch(url, {
     cache: "no-cache",
     signal: AbortSignal.timeout(9000),
   });
   if (!response.ok) throw new Error("归档未发布");
-  mergeArchive(await response.json());
+  mergeArchive(await response.json(), remote);
   render();
 }
 async function refreshArchive() {
@@ -556,7 +572,8 @@ async function refreshArchive() {
   archiveRead = Date.now();
   try {
     await readArchive(
-      "https://raw.githubusercontent.com/nonterreaplusultar-del/demo/market-data/close.json"
+      "https://raw.githubusercontent.com/nonterreaplusultar-del/demo/market-data/close.json",
+      true
     );
   } catch {
     /* Local archives remain available if the daily publication is delayed. */
@@ -579,8 +596,7 @@ async function refresh(userInitiated = false) {
     }
     save("quotes", Object.fromEntries(quotes));
     phase = "connected";
-    for (const a of indexAssets.slice(indexPage * 4, indexPage * 4 + 4))
-      if (a !== current) void loadSeries(a);
+    for (const a of visibleIndices()) if (a !== current) void loadSeries(a);
     const nav = assets.find((a) => !a.id);
     if (nav) void loadSeries(nav);
   } catch {
@@ -639,7 +655,6 @@ function searchResults() {
       const btn = el("button", "result");
       btn.dataset.code = a.code;
       btn.append(
-        token(a),
         el("strong", "", a.code),
         el("span", "label", a.name),
         el("small", "", places[a.market] + " · " + kindNames[a.kind])
@@ -732,6 +747,20 @@ $("ranges").addEventListener("click", (e) => {
   renderDetail();
   void loadSeries(current, chosenRange === "day");
 });
+$("chart-types").addEventListener("click", (e) => {
+  const button = e.target.closest("button[data-mode]");
+  if (!button || button.disabled) return;
+  stylePreference = button.dataset.mode;
+  save("chartStyle", stylePreference);
+  renderDetail();
+});
+compactTape.addEventListener("change", () => {
+  indexPage =
+    current.kind === "index"
+      ? Math.floor(indexAssets.indexOf(current) / indexGroupSize())
+      : 0;
+  renderIndices();
+});
 $("star").onclick = () => {
   if (stars.has(current.code)) stars.delete(current.code);
   else stars.add(current.code);
@@ -752,12 +781,11 @@ $("kind").onchange = () => {
   renderWatch();
 };
 function page(by) {
-  const count = Math.ceil(indexAssets.length / 4);
+  const count = Math.ceil(indexAssets.length / indexGroupSize());
   indexPage = (indexPage + by + count) % count;
   renderIndices();
   if (phase === "connected")
-    for (const a of indexAssets.slice(indexPage * 4, indexPage * 4 + 4))
-      void loadSeries(a);
+    for (const a of visibleIndices()) void loadSeries(a);
 }
 $("indices-prev").onclick = () => page(-1);
 $("indices-next").onclick = () => page(1);

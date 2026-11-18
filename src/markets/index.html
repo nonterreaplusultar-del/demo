@@ -6,13 +6,20 @@
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
-    <meta name="theme-color" content="#101211" />
+    <meta name="theme-color" content="#0b0d10" />
     <meta
       name="description"
       content="查看全球指数与美港股股票、ETF 和基金的价格走势，管理个人自选行情。"
     />
     <title>Tickline · 市场看板</title>
     <link rel="icon" href="./mark.svg" type="image/svg+xml" />
+    <link
+      rel="preload"
+      href="./fonts/geist.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
     <link rel="stylesheet" href="./screen.css" />
     <script type="module" src="./terminal.js"></script>
   </head>
@@ -46,31 +53,41 @@
         <symbol id="i-line" viewBox="0 0 24 24">
           <path d="m2.5 16 5-5 4 3 8-9M15 5h4.5v4.5" />
         </symbol>
-        <symbol id="i-clock" viewBox="0 0 24 24">
-          <circle cx="12" cy="12" r="8.4" />
-          <path d="M12 6.7v5.6l3.8 2.1" />
-        </symbol>
-        <symbol id="i-filter" viewBox="0 0 24 24">
-          <path d="M3 6h18M6 12h12M9.5 18h5" />
-        </symbol>
         <symbol id="i-down" viewBox="0 0 24 24">
           <path d="m6 9 6 6 6-6" />
+        </symbol>
+        <symbol id="i-globe" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="8.5" />
+          <ellipse cx="12" cy="12" rx="3.9" ry="8.5" />
+          <path d="M3.5 12h17" />
+        </symbol>
+        <symbol id="i-candles" viewBox="0 0 24 24">
+          <path d="M7 3v4m0 9v5M17 3v7m0 7v4" />
+          <rect x="4.5" y="7" width="5" height="9" rx=".7" />
+          <rect x="14.5" y="10" width="5" height="7" rx=".7" />
+        </symbol>
+        <symbol id="i-trend" viewBox="0 0 24 24">
+          <path d="M2 16.5 7.7 11l4.1 3.8L21 6.5" />
+        </symbol>
+        <symbol id="i-plus" viewBox="0 0 24 24">
+          <path d="M12 5v14M5 12h14" />
+        </symbol>
+        <symbol id="i-signal" viewBox="0 0 24 24">
+          <path d="M5 18v-2m5 2v-6m5 6V8m5 10V4" />
         </symbol>
       </defs>
     </svg>
     <header class="masthead">
-      <div class="head-inner">
+      <div class="shell topbar">
         <a class="wordmark" href="./" aria-label="Tickline 首页"
-          ><img src="./mark.svg" width="30" height="30" alt="" />Tickline<span
-            >.</span
-          ></a
+          ><img src="./mark.svg" alt="" width="31" height="31" />Tickline</a
         >
         <nav aria-label="主导航">
           <button id="overview-tab" class="nav-tab active" aria-pressed="true">
-            市场总览
+            行情
           </button>
           <button id="stars-tab" class="nav-tab" aria-pressed="false">
-            我的自选
+            自选
           </button>
         </nav>
         <div class="head-tools">
@@ -79,25 +96,16 @@
             class="search-button"
             aria-label="搜索行情，快捷键斜杠"
           >
-            <svg class="icon"><use href="#i-search" /></svg><span>搜索行情</span
-            ><kbd>/</kbd>
+            <svg class="icon"><use href="#i-search" /></svg
+            ><span>搜索代码或名称</span><kbd>/</kbd>
           </button>
-          <div class="clock">
-            <svg class="icon"><use href="#i-clock" /></svg
-            ><time id="clock">--:--:--</time><span>UTC+8</span>
-          </div>
-        </div>
-      </div>
-    </header>
-    <main>
-      <section class="overview" aria-labelledby="overview-title">
-        <div class="heading-row">
-          <div class="page-heading">
-            <h1 id="overview-title">市场总览</h1>
-            <time id="today"></time>
-          </div>
-          <div class="refresh-controls">
-            <button id="auto" class="auto-button" aria-pressed="true">
+          <div class="sync">
+            <button
+              id="auto"
+              class="auto-button"
+              aria-pressed="true"
+              title="暂停自动刷新"
+            >
               <i class="dot"></i><span>自动刷新 · 60s</span></button
             ><button
               id="refresh"
@@ -109,30 +117,41 @@
             </button>
           </div>
         </div>
-        <div class="section-label">
+      </div>
+    </header>
+    <section class="overview" aria-label="全球指数">
+      <div class="shell tape">
+        <div class="tape-label">
+          <svg class="icon"><use href="#i-globe" /></svg>
           <h2>全球指数</h2>
-          <div class="pager">
-            <span id="index-page"></span
-            ><button id="indices-prev" aria-label="上一组指数">
-              <svg class="icon"><use href="#i-left" /></svg></button
-            ><button id="indices-next" aria-label="下一组指数">
-              <svg class="icon"><use href="#i-right" /></svg>
-            </button>
-          </div>
         </div>
         <div id="indices" class="indices"></div>
-      </section>
+        <div class="pager">
+          <span id="index-page" class="sr-only" aria-live="polite"></span
+          ><button id="indices-prev" aria-label="上一组指数">
+            <svg class="icon"><use href="#i-left" /></svg></button
+          ><button id="indices-next" aria-label="下一组指数">
+            <svg class="icon"><use href="#i-right" /></svg>
+          </button>
+        </div>
+      </div>
+    </section>
+    <main class="shell">
       <div class="terminal-grid">
-        <section class="panel detail" id="detail" aria-labelledby="asset-name">
-          <div class="asset-top">
-            <div class="asset-identity">
-              <div id="asset-icon" class="asset-icon"></div>
-              <div>
-                <h2 id="asset-name">标普 500</h2>
-                <p id="asset-meta">SPX · 美国指数</p>
+        <section class="detail" id="detail" aria-labelledby="asset-name">
+          <header class="instrument">
+            <div class="asset-top">
+              <span class="asset-icon" id="asset-icon" aria-hidden="true"
+                ><svg class="icon"><use href="#i-line" /></svg
+              ></span>
+              <div class="identity" id="asset-meta">
+                <div class="asset-heading">
+                  <h1 id="asset-code">SPX</h1>
+                  <span class="slash" aria-hidden="true">/</span>
+                  <h2 id="asset-name">标普 500</h2>
+                </div>
+                <p id="asset-market"></p>
               </div>
-            </div>
-            <div class="asset-actions">
               <button
                 class="icon-button"
                 id="star"
@@ -140,8 +159,68 @@
                 aria-label="加入自选"
                 aria-pressed="false"
               >
-                <svg class="icon"><use href="#i-star" /></svg></button
-              ><button
+                <svg class="icon"><use href="#i-star" /></svg>
+              </button>
+            </div>
+            <div class="quote-overview">
+              <div class="quote">
+                <div class="quote-line">
+                  <strong id="price">—</strong><span id="unit">点</span>
+                </div>
+                <div class="change-line">
+                  <span id="change">—</span><span class="muted">较前收</span>
+                </div>
+              </div>
+              <dl class="chart-stats">
+                <div>
+                  <dt>区间高点</dt>
+                  <dd id="period-high">—</dd>
+                </div>
+                <div>
+                  <dt>区间低点</dt>
+                  <dd id="period-low">—</dd>
+                </div>
+                <div>
+                  <dt>区间涨跌</dt>
+                  <dd id="period-change">—</dd>
+                </div>
+              </dl>
+            </div>
+          </header>
+          <div class="chart-toolbar">
+            <div class="time-controls">
+              <h2>走势图</h2>
+              <div
+                id="ranges"
+                class="ranges"
+                role="group"
+                aria-label="图表时间范围"
+              ></div>
+            </div>
+            <div class="plot-tools">
+              <div id="chart-types" role="group" aria-label="图表类型">
+                <button
+                  class="icon-button"
+                  id="candle-mode"
+                  data-mode="candles"
+                  aria-label="K 线图"
+                  title="K 线图"
+                  aria-pressed="false"
+                >
+                  <svg class="icon"><use href="#i-candles" /></svg>
+                </button>
+                <button
+                  class="icon-button"
+                  id="line-mode"
+                  data-mode="line"
+                  aria-label="折线图"
+                  title="折线图"
+                  aria-pressed="true"
+                >
+                  <svg class="icon"><use href="#i-trend" /></svg>
+                </button>
+              </div>
+              <button
                 class="icon-button"
                 id="expand"
                 title="展开图表"
@@ -152,59 +231,54 @@
               </button>
             </div>
           </div>
-          <div class="quote-block">
-            <div class="quote-line">
-              <strong id="price">—</strong><span id="unit">点</span>
+          <div class="chart-body">
+            <div class="chart-readout">
+              <strong id="legend"></strong>
+              <div id="ohlc" class="ohlc"></div>
             </div>
-            <div class="change-line">
-              <span id="change">—</span><span>较前收</span>
-            </div>
-          </div>
-          <div class="chart-toolbar">
             <div
-              id="ranges"
-              class="ranges"
+              class="plot"
+              id="plot"
+              tabindex="0"
               role="group"
-              aria-label="图表时间范围"
-            ></div>
-            <span class="series-key"
-              ><i></i><span id="legend">收盘价</span></span
+              aria-label="价格走势图，可用左右方向键查看数据点"
             >
+              <canvas id="chart" aria-hidden="true"></canvas>
+              <div id="plot-tip" class="plot-tip" hidden></div>
+              <p id="plot-empty" class="empty-chart" hidden></p>
+            </div>
           </div>
-          <div
-            class="plot"
-            id="plot"
-            tabindex="0"
-            role="group"
-            aria-label="价格走势图，可用左右方向键查看数据点"
-          >
-            <canvas id="chart" aria-hidden="true"></canvas>
-            <div id="plot-tip" class="plot-tip" hidden></div>
-            <p id="plot-empty" class="empty-chart" hidden></p>
-          </div>
-          <dl class="chart-stats">
-            <div>
-              <dt>区间最低</dt>
-              <dd id="period-low">—</dd>
-            </div>
-            <div>
-              <dt>区间最高</dt>
-              <dd id="period-high">—</dd>
-            </div>
-            <div>
-              <dt>区间涨跌</dt>
-              <dd id="period-change">—</dd>
-            </div>
-          </dl>
           <p id="quote-asof" class="asof"></p>
         </section>
-        <section class="panel watch" id="watch" aria-labelledby="watch-title">
+        <aside class="watch" id="watch" aria-labelledby="watch-title">
           <div class="list-heading">
-            <h2 id="watch-title">品种行情</h2>
+            <div class="watch-label">
+              <h2 id="watch-title">市场行情</h2>
+              <span id="list-count"></span>
+            </div>
+            <button
+              id="list-search"
+              class="icon-button"
+              aria-label="搜索或添加品种"
+              title="搜索或添加品种"
+            >
+              <svg class="icon"><use href="#i-plus" /></svg>
+            </button>
+          </div>
+          <div class="list-controls">
+            <div
+              id="market-filter"
+              class="market-filter"
+              role="group"
+              aria-label="筛选市场"
+            >
+              <button data-market="all" aria-pressed="true">全部</button
+              ><button data-market="US" aria-pressed="false">美股</button
+              ><button data-market="HK" aria-pressed="false">港股</button>
+            </div>
             <label class="kind-filter" title="筛选品种"
-              ><svg class="icon"><use href="#i-filter" /></svg
               ><span id="kind-text">全部品种</span
-              ><svg class="icon small"><use href="#i-down" /></svg
+              ><svg class="icon"><use href="#i-down" /></svg
               ><select id="kind" aria-label="筛选品种">
                 <option value="all">全部品种</option>
                 <option value="stock">股票</option>
@@ -214,37 +288,26 @@
               </select></label
             >
           </div>
-          <div
-            id="market-filter"
-            class="market-filter"
-            role="group"
-            aria-label="筛选市场"
-          >
-            <button data-market="all" aria-pressed="true">全部</button
-            ><button data-market="US" aria-pressed="false">美股</button
-            ><button data-market="HK" aria-pressed="false">港股</button>
-          </div>
           <div class="table-head">
-            <span>名称 / 代码</span><span>价格</span><span>日涨跌</span>
+            <span>品种</span><span>价格</span><span>日涨跌</span>
           </div>
           <div id="watch-rows" class="watch-rows"></div>
-          <div class="list-bottom">
-            <span id="list-count"></span
-            ><button id="list-search">
-              <svg class="icon"><use href="#i-search" /></svg>查找品种
-            </button>
-          </div>
-        </section>
+        </aside>
       </div>
       <footer>
-        <span id="feed-status" role="status" aria-live="polite"
-          >正在获取行情…</span
-        ><span
-          >免费行情可能延迟 ·
-          <a href="./sources.txt" target="_blank" rel="noopener"
-            >数据来源</a
-          ></span
-        >
+        <div class="feed">
+          <svg class="icon"><use href="#i-signal" /></svg
+          ><span id="feed-status" role="status" aria-live="polite"
+            >正在获取行情…</span
+          >
+        </div>
+        <div class="foot-meta">
+          <span>行情可能延迟</span
+          ><a href="./sources.txt" target="_blank" rel="noopener">数据来源</a
+          ><span class="clock"
+            ><time id="clock">--:--:--</time> <span>UTC+8</span></span
+          >
+        </div>
       </footer>
       <noscript>请启用 JavaScript 查看行情。</noscript>
     </main>

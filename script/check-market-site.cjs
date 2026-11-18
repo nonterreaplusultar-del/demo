@@ -22,7 +22,18 @@ async function main() {
     await page.waitForFunction(
       () => document.querySelector("#price").textContent !== "—"
     );
-    console.log("Public Pages route and chart loaded.");
+    await page.waitForSelector('#plot[data-view="candles"]', {
+      timeout: 40000,
+    });
+    assert.equal(await page.locator("#ohlc b").count(), 4);
+    await page.locator("#line-mode").click();
+    assert.equal(await page.locator("#plot").getAttribute("data-view"), "line");
+    await page.locator("#candle-mode").click();
+    assert.equal(
+      await page.locator("#plot").getAttribute("data-view"),
+      "candles"
+    );
+    console.log("Public Pages route, OHLC chart and line switch loaded.");
     await page.waitForFunction(
       () =>
         document.querySelector("#feed-status").classList.contains("connected"),
@@ -58,7 +69,17 @@ async function main() {
         document.querySelector("#price").textContent !== "—"
     );
     assert.equal(await page.locator("[data-range=day]").isDisabled(), true);
-    console.log("Daily fund NAV loaded.");
+    assert.equal(await page.locator("#plot").getAttribute("data-view"), "line");
+    assert.equal(await page.locator("#candle-mode").isDisabled(), true);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForFunction(
+      () => document.querySelectorAll("#indices button").length === 2
+    );
+    assert.equal(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+      390
+    );
+    console.log("Daily fund NAV and mobile layout verified.");
   } finally {
     await browser.close();
   }
