@@ -9,30 +9,5 @@ Yahoo Finance：https://finance.yahoo.com/
 开放式基金显示最近公布的单位净值。全球指数用点计价，美股、港股按标的原币计价。
 每个图表的时间范围按实际取得的价格记录计算。日线的区间高低为收盘价的最高和最低值。
 
-初始历史记录
-每个品种在 snapshot.json 中记录来源、原始链接和交易日期。
-全球指数：https://github.com/omerfurkanguney/global-stock-indices-dataset
-全球指数：https://github.com/MohammadrezaAmani/Global-Stock-Market-Indices-Historical-Dataset
-美股及港股收盘归档：https://github.com/finmap-org/data-us 和 https://github.com/finmap-org/data-hongkong
-ETF 日线样本：https://github.com/QuantConnect/Lean/tree/master/Data/equity/usa/daily
-
-Global Stock Market Indices Historical Dataset
-MIT License, Copyright (c) 2024 Mohammadreza Amani
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+离线快照
+内置的 snapshot.json 及每日归档均按品种记录数据来源、原始链接和交易日期。

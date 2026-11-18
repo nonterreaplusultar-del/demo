@@ -1,0 +1,27 @@
+name: Verify published market terminal
+on:
+  workflow_dispatch:
+  deployment_status:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/market-site.yml'
+      - 'script/check-market-site.cjs'
+permissions:
+  contents: read
+jobs:
+  browser:
+    if: github.event_name != 'deployment_status' || (github.event.deployment_status.state == 'success' && github.event.deployment.environment == 'github-pages')
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Check Pages, intraday quotes and fund NAV in Chrome
+        run: |
+          npm install --prefix "$RUNNER_TEMP/market-browser" --ignore-scripts --no-audit --no-fund playwright-core@1.56.1
+          NODE_PATH="$RUNNER_TEMP/market-browser/node_modules" CHROME_BIN="$(command -v google-chrome)" node script/check-market-site.cjs
