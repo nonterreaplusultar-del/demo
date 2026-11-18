@@ -14,19 +14,31 @@ async function main() {
   });
   try {
     const page = await browser.newPage();
+    // Poll the HTML without filling the browser's cache with the preceding release.
+    const release = process.env.GITHUB_SHA;
     for (let attempt = 1; ; attempt++) {
       try {
-        const response = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 15000 });
-        assert.equal(response?.status(), 200, `Failed to load ${url}`);
-        assert.ok(await page.locator("#candle-mode").count(), "Waiting for the updated chart");
+        const probe = new URL(url);
+        if (release) probe.searchParams.set("release", release);
+        const response = await page.request.get(probe.href, { timeout: 15000 });
+        assert.equal(response.status(), 200, `Failed to load ${url}`);
+        assert.match(
+          await response.text(),
+          /\bid=["']?candle-mode\b/,
+          `Waiting for the updated chart at ${url}`
+        );
         break;
       } catch (error) {
         if (attempt === 12) throw error;
         await new Promise((done) => setTimeout(done, 10000));
       }
     }
+    await page.goto(url, { waitUntil: "domcontentloaded" });
     assert.equal(await page.title(), "Tickline · 市场看板");
-    assert.ok(await page.evaluate(async () => (await document.fonts.load('14px "Geist Mono"')).length > 0), "Market font failed to load");
+    assert.ok(
+      await page.evaluate(async () => (await document.fonts.load('14px "Geist Mono"')).length > 0),
+      "Market font failed to load"
+    );
     await page.locator("#price").waitFor();
     await page.waitForFunction(
       () => document.querySelector("#price").textContent !== "—"
@@ -95,5 +107,9 @@ async function main() {
 }
 main().catch((error) => {
   console.error(error.message);
+  if (process.env.GITHUB_ACTIONS) {
+    const message = error.message.replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A");
+    console.log(`::error title=Published market check failed::${message}`);
+  }
   process.exitCode = 1;
 });
