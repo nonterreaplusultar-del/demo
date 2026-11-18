@@ -1,5 +1,15 @@
 # 🍥 Astro 主题 vhAstro-Theme
 
+
+## Tickline 看盘页
+
+启动开发服务器后访问 `/markets/`，也可以从博客导航的「看盘」进入。搜索支持代码或名称。美股和港股可以通过完整代码查询并加入自选，自选保存在当前浏览器。
+
+页面在前台每 60 秒查询东方财富，按交易所标注时间显示最新价。在 Vercel 上，`api/market-history.js` 提供 Yahoo Finance 备用报价和历史走势。开放式基金按交易日公布净值。断线时，页面保留有日期的最近记录。初始快照的出处见 [数据来源](public/markets/sources.txt)。
+
+`npm run build` 生成站点。完整的看盘静态文件位于 `dist/markets/`，可单独发布到 GitHub Pages 的 `markets/` 目录。仓库工作流 `Market closing prices` 在工作日的 10:35、22:35 UTC 尝试更新收盘归档，写入专用分支 `market-data`。所有请求均使用公开行情接口。
+
+
 ## 🚀 vhAstro-Theme：一款基于 Astro 构建的优雅的响应式博客主题
 
 **「当极简主义遇上工程之美」**

@@ -1,4 +1,5 @@
 import path from "path";
+import marketHistory from "./api/market-history.js";
 import mdx from '@astrojs/mdx';
 import sitemap from '@astrojs/sitemap';
 import Compress from "@playform/compress";
@@ -52,6 +53,14 @@ export default defineConfig({
 		syntaxHighlight: 'shiki',
 		shikiConfig: { theme: 'github-light' },
 	},
-	vite: { resolve: { alias: { "@": path.resolve(__dirname, "./src") } } },
+	vite: {
+		plugins: [{
+			name: 'tickline-market-api',
+			configureServer(server) {
+				server.middlewares.use('/api/market-history', marketHistory);
+			},
+		}],
+		resolve: { alias: { "@": path.resolve(__dirname, "./src") } }
+	},
 	server: { host: '0.0.0.0' }
 });

@@ -1,0 +1,47 @@
+name: Market closing prices
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '35 10,22 * * 1-5'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/market-close.yml'
+      - 'script/market-close.mjs'
+      - 'public/markets/market-data.js'
+permissions:
+  contents: write
+concurrency:
+  group: tickline-market-close
+  cancel-in-progress: false
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Refresh dated closes and fund NAVs
+        shell: bash
+        run: |
+          set -euo pipefail
+          previous=public/markets/snapshot.json
+          if git ls-remote --exit-code --heads origin market-data >/dev/null; then
+            git fetch --depth=1 origin refs/heads/market-data:refs/remotes/origin/market-data
+            previous="$RUNNER_TEMP/previous.json"
+            git show origin/market-data:close.json > "$previous"
+          fi
+          node script/market-close.mjs "$previous" "$RUNNER_TEMP/close.json"
+          if git rev-parse --verify refs/remotes/origin/market-data >/dev/null 2>&1; then
+            git switch -c market-data --track origin/market-data
+          else
+            git switch --orphan market-data
+          fi
+          cp "$RUNNER_TEMP/close.json" close.json
+          git add close.json
+          if ! git diff --cached --quiet; then
+            git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Refresh market closing prices'
+            git push origin HEAD:refs/heads/market-data
+          fi
